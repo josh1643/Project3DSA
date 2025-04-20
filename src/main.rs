@@ -1,7 +1,11 @@
+mod translationhash;
+mod translationloader;
+use crate::translationhash::TranslationHash;
+use crate::translationloader::TranslationLoader;
 use eframe::egui;
 use egui_plot::{Plot, PlotPoints, Line, Legend};
 use image;
-use rand::{Rng, rngs::ThreadRng};
+use std::time::Instant;
 
 pub struct TranslatorApp {
     //user input variable is here
@@ -16,9 +20,15 @@ pub struct TranslatorApp {
     //vars for flags above input/output
     english_flag: Option<egui::TextureHandle>,
     spanish_flag: Option<egui::TextureHandle>,
+    translation_hash: TranslationHash,
 }
 impl Default for TranslatorApp {
     fn default() -> Self {
+        let loader = TranslationLoader { 
+            path: "data/esdatabase.csv".to_string(), 
+            count: 0, 
+        }; 
+        let hash = loader.load();
         Self {
             input_text: String::new(),
             output_text: String::new(),
@@ -27,6 +37,7 @@ impl Default for TranslatorApp {
             hashmap_times: Vec::new(),
             english_flag: None,
             spanish_flag: None,
+            translation_hash: hash,
         }
     }
 }
@@ -127,18 +138,19 @@ impl eframe::App for TranslatorApp {
                                 );
                                 ui.add_space(6.0);
                                 if ui.add_sized([300.0, 34.0], egui::Button::new("Translate")).clicked() {
-                                // translate button would call the translate functions from data structures, still need to implement timing stuff, there are random times being generated now
-                                //so i could see if it worked
-                                    let mut rng = ThreadRng::default();
-                                    let tree_time = rng.random_range(2.0..4.0);
-                                    let hash_time = rng.random_range(1.0..2.0);
-                                    //place holder for output change later
-                                    self.output_text = format!("[English ➡ Spanish] {}", self.input_text);
-                                    //increments the translation and then pushes the times into the vector to store
+                                    let start = Instant::now(); 
+                                    let result = self.translation_hash.at(&self.input_text);
+                                    let hash_time = start.elapsed().as_secs_f64() * 1000.0; 
+                                    self.output_text = match result { 
+                                        Some(t) => t, 
+                                        None => "Translation not found.".to_string(), 
+                                    }; 
+                                    //random time still for tree time just to test
+                                    let tree_time = hash_time * 1.5;
                                     let t = (self.translation_count + 1) as f64;
-                                    self.tree_times.push([t, tree_time]);
-                                    self.hashmap_times.push([t, hash_time]);
-                                    self.translation_count += 1;
+                                    self.tree_times.push([t, tree_time]); 
+                                    self.hashmap_times.push([t, hash_time]); 
+                                    self.translation_count += 1; 
                                 }
                             });
                             ui.add_space(20.0);
@@ -191,7 +203,7 @@ impl eframe::App for TranslatorApp {
                                     .include_x(1.0)
                                     .include_x(10.0)
                                     .include_y(0.0)
-                                    .include_y(5.0)
+                                    .include_y(0.5)
                                     .show(ui, |plot_ui| {
                                         plot_ui.line(tree_line);
                                         plot_ui.line(hashmap_line);
