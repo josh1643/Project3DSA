@@ -125,14 +125,14 @@ impl eframe::App for TranslatorApp {
                                             //this makes sure text is limited to 25 chars so our program wont crash bc of too many inputs
                                             //we can change this to whatever i just put 25 as a starter
                                             self.input_text = self.input_text.replace('\n', "");
-                                            if self.input_text.chars().count() > 25 {
-                                                self.input_text = self.input_text.chars().take(25).collect();
+                                            if self.input_text.chars().count() > 100 {
+                                                self.input_text = self.input_text.chars().take(100).collect();
                                             }
                                         }
                                     });
                                 ui.label(
                                     //displays char count
-                                    egui::RichText::new(format!("{} / 25", self.input_text.chars().count()))
+                                    egui::RichText::new(format!("{} / 100", self.input_text.chars().count()))
                                         .small()
                                         .color(egui::Color32::GRAY),
                                 );
