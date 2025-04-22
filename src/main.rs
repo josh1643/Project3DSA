@@ -256,7 +256,7 @@ impl eframe::App for TranslatorApp {
                                     .include_x(1.0)
                                     .include_x(10.0)
                                     .include_y(0.0)
-                                    .include_y(0.5)
+                                    .include_y(0.05)
                                     .show(ui, |plot_ui| {
                                         plot_ui.line(tree_line);
                                         plot_ui.line(hashmap_line);
