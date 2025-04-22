@@ -1,4 +1,5 @@
 #![allow(unused)]
+use std::hash::*;
 use std::vec;
 
 pub struct TranslationHash {
@@ -31,11 +32,9 @@ impl TranslationMap {
     }
 
     fn hash(&self, key: &String) -> usize {
-        key.clone()
-            .chars()
-            .map(|letter| letter.to_ascii_lowercase() as usize)
-            .sum::<usize>()
-            % self.translations.len()
+        let mut hash = DefaultHasher::new();
+        key.hash(&mut hash);
+        hash.finish() as usize % self.translations.len()
     }
 
     fn add(&mut self, phrase: &String, translation: &String) {
