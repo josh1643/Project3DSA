@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 use std::fs::read_to_string;
-use std::vec::Vec;
+//use std::vec::Vec;
 
 pub struct TrieNode {
-    children : HashMap<char, TrieNode>,
-    translation : String,
+    children: HashMap<char, TrieNode>,
+    translation: String,
 }
 
 impl TrieNode {
     fn default() -> Self {
         Self {
-            children : HashMap::new(),
-            translation : String::new(),
+            children: HashMap::new(),
+            translation: String::new(),
         }
     }
     fn go_to(&mut self, c: char) -> &mut TrieNode {
@@ -22,43 +22,45 @@ impl TrieNode {
     }
 }
 
-
 pub struct Trie {
-    root : TrieNode,
+    root: TrieNode,
 }
 
 impl Trie {
-    fn default() -> Self {
+    pub fn default() -> Self {
         Self {
-            root : TrieNode::default(),
+            root: TrieNode::default(),
         }
     }
-    fn load_from_file(&mut self, file_path: String) {
-        let mut counter = 0;
+    pub fn load_from_file(&mut self, file_path: String) {
+        //let mut counter = 0;
         for line in read_to_string(file_path).unwrap().lines() {
-            if line.chars().filter(|c| *c==',').count() != 1 {
+            if line.chars().filter(|c| *c == ',').count() != 1 {
                 continue;
             }
             let english = line.split(',').next().unwrap();
+            let english_lower = english.to_lowercase();
             let spanish = line.split(',').last().unwrap();
             let mut current = &mut self.root;
-            for c in english.chars() {
+            for c in english_lower.chars() {
                 current = current.go_to(c);
             }
             current.translation = spanish.to_string();
-            counter += 1;
+            //counter += 1;
         }
-        println!("Loaded {} words", counter);
+        //println!("Loaded {} words", counter);
     }
-    fn translate(&self, word: &str) -> String {
+    pub fn translate(&self, word: &str) -> String {
         let mut current = &self.root;
-        for c in word.chars() {
+        let word_lower = word.to_lowercase();
+        for c in word_lower.chars() {
             current = &current.children[&c];
         }
         return current.translation.clone();
     }
 }
-
+/*
 fn main() {
     let file_path = "C:/Users/Daniel/Desktop/project3COP/words.txt";
 }
+*/

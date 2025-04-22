@@ -1,9 +1,12 @@
 mod translationhash;
 mod translationloader;
+mod trie;
+
 use crate::translationhash::TranslationHash;
 use crate::translationloader::TranslationLoader;
+use crate::trie::Trie;
 use eframe::egui;
-use egui_plot::{Plot, PlotPoints, Line, Legend};
+use egui_plot::{Legend, Line, Plot, PlotPoints};
 use image;
 use std::time::Instant;
 
@@ -21,14 +24,17 @@ pub struct TranslatorApp {
     english_flag: Option<egui::TextureHandle>,
     spanish_flag: Option<egui::TextureHandle>,
     translation_hash: TranslationHash,
+    translation_trie: Trie,
 }
 impl Default for TranslatorApp {
     fn default() -> Self {
-        let loader = TranslationLoader { 
-            path: "data/esdatabase.csv".to_string(), 
-            count: 0, 
-        }; 
+        let loader = TranslationLoader {
+            path: "data/esdatabase.csv".to_string(),
+            count: 0,
+        };
         let hash = loader.load();
+        let mut trie = Trie::default();
+        trie.load_from_file("data/esdatabase.csv".to_string());
         Self {
             input_text: String::new(),
             output_text: String::new(),
@@ -38,6 +44,7 @@ impl Default for TranslatorApp {
             english_flag: None,
             spanish_flag: None,
             translation_hash: hash,
+            translation_trie: trie,
         }
     }
 }
@@ -46,7 +53,11 @@ fn load_icon() -> Option<egui::IconData> {
     let image = image::open("assets/icon.png").ok()?.to_rgba8();
     let (width, height) = image.dimensions();
     let rgba = image.into_raw();
-    Some(egui::IconData { rgba, width, height })
+    Some(egui::IconData {
+        rgba,
+        width,
+        height,
+    })
 }
 //flags are loaded here
 fn load_flag(ctx: &egui::Context, path: &str) -> Option<egui::TextureHandle> {
@@ -70,10 +81,12 @@ impl eframe::App for TranslatorApp {
             //allows for scrolling, on my computers it looks fine but i think we need it just in case anyone has a smaller screen
             egui::ScrollArea::vertical().show(ui, |ui| {
                 //ascii image for the logo, can be changed if we need to i just made it this way for fun
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Center), |ui| {
-                    ui.label(
-                        egui::RichText::new(
-                            r#"
+                ui.with_layout(
+                    egui::Layout::top_down_justified(egui::Align::Center),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new(
+                                r#"
     _____
   .-'.  ':'-.
 .''::: .:    '.
@@ -85,20 +98,24 @@ impl eframe::App for TranslatorApp {
   '.      :::  .'
     '-.___'_.-'
 "#,
-                        )
-                        .monospace()
-                        .color(egui::Color32::WHITE),
-                    );
-                });
-                ui.add_space(10.0);
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Center), |ui| {
-                    ui.heading(
-                        egui::RichText::new("English to Spanish Translator")
-                            .strong()
-                            .size(28.0)
+                            )
+                            .monospace()
                             .color(egui::Color32::WHITE),
-                    );
-                });
+                        );
+                    },
+                );
+                ui.add_space(10.0);
+                ui.with_layout(
+                    egui::Layout::top_down_justified(egui::Align::Center),
+                    |ui| {
+                        ui.heading(
+                            egui::RichText::new("English to Spanish Translator")
+                                .strong()
+                                .size(28.0)
+                                .color(egui::Color32::WHITE),
+                        );
+                    },
+                );
                 ui.add_space(20.0);
                 let content_width = 640.0;
                 //centers and alligns everything
@@ -115,7 +132,10 @@ impl eframe::App for TranslatorApp {
                                 });
                                 ui.label("Enter Text Here:");
                                 egui::Frame::default()
-                                    .stroke(egui::Stroke::new(2.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                                    .stroke(egui::Stroke::new(
+                                        2.0,
+                                        ui.visuals().widgets.noninteractive.bg_stroke.color,
+                                    ))
                                     .show(ui, |ui| {
                                         let response = ui.add_sized(
                                             [300.0, 100.0],
@@ -126,31 +146,54 @@ impl eframe::App for TranslatorApp {
                                             //we can change this to whatever i just put 25 as a starter
                                             self.input_text = self.input_text.replace('\n', "");
                                             if self.input_text.chars().count() > 100 {
-                                                self.input_text = self.input_text.chars().take(100).collect();
+                                                self.input_text =
+                                                    self.input_text.chars().take(100).collect();
                                             }
                                         }
                                     });
                                 ui.label(
                                     //displays char count
-                                    egui::RichText::new(format!("{} / 100", self.input_text.chars().count()))
-                                        .small()
-                                        .color(egui::Color32::GRAY),
+                                    egui::RichText::new(format!(
+                                        "{} / 100",
+                                        self.input_text.chars().count()
+                                    ))
+                                    .small()
+                                    .color(egui::Color32::GRAY),
                                 );
                                 ui.add_space(6.0);
-                                if ui.add_sized([300.0, 34.0], egui::Button::new("Translate")).clicked() {
-                                    let start = Instant::now(); 
-                                    let result = self.translation_hash.at(&self.input_text);
-                                    let hash_time = start.elapsed().as_secs_f64() * 1000.0; 
-                                    self.output_text = match result { 
-                                        Some(t) => t, 
-                                        None => "Translation not found.".to_string(), 
-                                    }; 
-                                    //random time still for tree time just to test
-                                    let tree_time = hash_time * 1.5;
-                                    let t = (self.translation_count + 1) as f64;
-                                    self.tree_times.push([t, tree_time]); 
-                                    self.hashmap_times.push([t, hash_time]); 
-                                    self.translation_count += 1; 
+                                if ui
+                                    .add_sized([300.0, 34.0], egui::Button::new("Translate"))
+                                    .clicked()
+                                {
+                                    let hash_start = Instant::now();
+                                    let hash_result = self.translation_hash.at(&self.input_text);
+                                    let hash_time = hash_start.elapsed().as_secs_f64() * 1000.0;
+
+                                    if hash_result.is_some() {
+                                        //random time still for tree time just to test
+                                        let tree_start = Instant::now();
+                                        let tree_result =
+                                            self.translation_trie.translate(&self.input_text);
+                                        if hash_result.is_some() {
+                                            if hash_result.as_ref().unwrap().clone() != tree_result
+                                            {
+                                                panic!(
+                                                    "Translation mismatch/n  Hash: {}\n  Trie: {}",
+                                                    hash_result.as_ref().unwrap().clone(),
+                                                    tree_result
+                                                );
+                                            }
+                                        }
+                                        let tree_time = tree_start.elapsed().as_secs_f64() * 1000.0;
+                                        let t = (self.translation_count + 1) as f64;
+                                        self.tree_times.push([t, tree_time]);
+                                        self.hashmap_times.push([t, hash_time]);
+                                        self.translation_count += 1;
+                                    }
+                                    self.output_text = match hash_result {
+                                        Some(t) => t,
+                                        None => "Translation not found.".to_string(),
+                                    };
                                 }
                             });
                             ui.add_space(20.0);
@@ -161,7 +204,10 @@ impl eframe::App for TranslatorApp {
                                 });
                                 ui.label("Output Text Here:");
                                 egui::Frame::default()
-                                    .stroke(egui::Stroke::new(2.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                                    .stroke(egui::Stroke::new(
+                                        2.0,
+                                        ui.visuals().widgets.noninteractive.bg_stroke.color,
+                                    ))
                                     .fill(ui.visuals().extreme_bg_color)
                                     .show(ui, |ui| {
                                         ui.add_sized(
@@ -173,7 +219,10 @@ impl eframe::App for TranslatorApp {
                                     });
                                 ui.add_space(19.0);
                                 //resets the input and output text, easier than deleting all
-                                if ui.add_sized([300.0, 34.0], egui::Button::new("Reset")).clicked() {
+                                if ui
+                                    .add_sized([300.0, 34.0], egui::Button::new("Reset"))
+                                    .clicked()
+                                {
                                     self.input_text.clear();
                                     self.output_text.clear();
                                 }
@@ -184,7 +233,8 @@ impl eframe::App for TranslatorApp {
                 ui.add_space(20.0);
                 //dif lines for each data struc with dif colors, easy to compare visually, i thought it would be better than just text
                 let tree_line = Line::new("26-ary Tree", PlotPoints::from(self.tree_times.clone()));
-                let hashmap_line = Line::new("HashMap", PlotPoints::from(self.hashmap_times.clone()));
+                let hashmap_line =
+                    Line::new("HashMap", PlotPoints::from(self.hashmap_times.clone()));
                 let graph_width = 620.0;
                 let left_padding = (ui.available_width() - graph_width).max(0.0) / 2.0;
                 ui.horizontal(|ui| {
@@ -192,11 +242,14 @@ impl eframe::App for TranslatorApp {
                     ui.allocate_ui(egui::vec2(graph_width, 300.0), |ui| {
                         egui::Frame::group(ui.style())
                             .fill(ui.visuals().widgets.noninteractive.bg_fill)
-                            .stroke(egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                            .stroke(egui::Stroke::new(
+                                1.0,
+                                ui.visuals().widgets.noninteractive.bg_stroke.color,
+                            ))
                             .inner_margin(10.0)
                             .show(ui, |ui| {
                                 Plot::new("translation_benchmark")
-                                //this is where graph is generated, might need to change the y axis range depending on our actual times
+                                    //this is where graph is generated, might need to change the y axis range depending on our actual times
                                     .legend(Legend::default())
                                     .x_axis_label("Translation #")
                                     .y_axis_label("Time (ms)")

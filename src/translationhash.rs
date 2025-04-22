@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::vec;
 
 pub struct TranslationHash {
@@ -49,8 +50,20 @@ impl TranslationMap {
                 });
                 self.count += 1;
                 break;
+            } else {
+                let nodedata = self.translations[index].as_ref().unwrap();
+
+                if phrase.clone() == nodedata.phrase {
+                    self.translations[index] = Some(TranslationNode {
+                        phrase: phrase.clone(),
+                        translation: translation.clone(),
+                    });
+                    self.count += 1;
+                    break;
+                } else {
+                    offset += 1;
+                }
             }
-            offset += 1;
         }
     }
 
@@ -83,7 +96,12 @@ impl TranslationHash {
     }
 
     pub fn add(&mut self, phrase: &String, translation: &String) {
-        self.translations.add(phrase, translation);
+        let lowercase = phrase
+            .chars()
+            .map(|char| char.to_ascii_lowercase())
+            .collect::<String>();
+
+        self.translations.add(&lowercase, translation);
         if self.translations.count as f32 / self.translations.size as f32 >= self.load_factor {
             self.rehash();
         }
@@ -101,7 +119,12 @@ impl TranslationHash {
     }
 
     pub fn at(&self, key: &String) -> Option<String> {
-        self.translations.at(key)
+        let lowercase = key
+            .chars()
+            .map(|char| char.to_ascii_lowercase())
+            .collect::<String>();
+
+        self.translations.at(&lowercase)
     }
 
     pub fn size(&self) -> i32 {
